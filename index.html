@@ -136,5 +136,5 @@ async function exportAll(){const [r,l]=await Promise.all([db.from('recipes').sel
  const b64=async p=>{const {data}=await db.storage.from('recipe-photos').download(p);return new Promise(res=>{const f=new FileReader();f.onload=()=>res(f.result);f.readAsDataURL(data)})};
  for(const x of r.data)if(x.photo)x.photo_data=await b64(x.photo);
  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({exported:new Date().toISOString(),recipes:r.data,lists:l.data})],{type:'application/json'}));a.download='boodschappen-back-up.json';a.click()}
-addEventListener('hashchange',route);db.auth.onAuthStateChange(route);route();
+addEventListener('hashchange',route);db.auth.onAuthStateChange(()=>setTimeout(route,0));route();
 </script></body></html>
