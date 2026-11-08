@@ -43,7 +43,7 @@ const SH={gram:'g',kilogram:'kg',milliliter:'ml',liter:'l',stuk:'stuk',eetlepel:
 const BASE={gram:['g',1],kilogram:['g',1000],milliliter:['ml',1],liter:['ml',1000],eetlepel:['ml',15],theelepel:['ml',5],stuk:['stuk',1],snufje:['snufje',1],verpakking:['verpakking',1]};
 const COUNT=['stuk','snufje','verpakking'];
 const AIS=['🥦 Groente & fruit','🥩 Vlees & vis','🥛 Zuivel','🥫 Houdbaar','Overig'];
-const GUESS=[[/ui|knoflook|paprika|tomaat|sla|wortel|aardappel|courgette|champignon|citroen|appel|banaan|spinazie|broccoli|komkommer|prei/,0],[/kip|gehakt|vlees|vis|zalm|spek|worst|biefstuk|garnaal|tonijn/,1],[/melk|kaas|boter|room|yoghurt|ei(eren)?$|eieren|kwark/,2],[/pasta|spaghetti|rijst|blik|saus|bloem|suiker|olie|zout|peper|meel|bonen|bouillon|ketjap|soja/,3]];
+const GUESS=[[/bouillon/,3],[/\bui\b|\buien\b|knoflook|paprika|tomaat|sla|wortel|aardappel|courgette|champignon|citroen|appel|banaan|spinazie|broccoli|komkommer|prei/,0],[/kip|gehakt|vlees|vis|zalm|spek|worst|biefstuk|garnaal|tonijn/,1],[/melk|zuivel|kaas|boter|room|yoghurt|ei(eren)?$|eieren|kwark/,2],[/pasta|spaghetti|rijst|blik|saus|bloem|suiker|olie|zout|peper|meel|bonen|bouillon|ketjap|soja/,3]];
 const norm=n=>n.toLowerCase().trim().replace(/\s+/g,' ');
 const aisleOf=(n,map)=>map[n]||AIS[(GUESS.find(g=>g[0].test(n))||[0,4])[1]];
 const nl=n=>String(Math.round(n*10)/10).replace('.',',');
@@ -51,26 +51,26 @@ const fmtO=(q,u)=>(COUNT.includes(u)?nl(Math.ceil(q-1e-9)):nl(q))+' '+SH[u];
 const fmtB=(q,b)=>b=='g'&&q>=1000?nl(q/1000)+' kg':b=='ml'&&q>=1000?nl(q/1000)+' l':(COUNT.includes(b)?nl(Math.ceil(q-1e-9)):nl(q))+' '+b;
 const photo=p=>p?db.storage.from('recipe-photos').getPublicUrl(p).data.publicUrl:'';
 const dt=d=>new Date(d).toLocaleDateString('nl-NL',{day:'numeric',month:'long',year:'numeric'});
-const go=h=>location.hash=h;let user=null,R=null,photoFile=null,HH=null,HI=null;
+const go=h=>location.hash=h;let user=null,R=null,photoFile=null,HH=null,HI=null,FV=false,SHOWD=false;
 const NAV=[['#/','🏠','Home'],['#/recepten','🍝','Recepten'],['#/maken','🛒','Boodschappen'],['#/historie','📜','Historie']];
-async function route(){
+async function route(){if(window.REC)return;
   const {data:{session}}=await db.auth.getSession();user=session?.user;
   document.getElementById('nav').innerHTML=user?NAV.map(n=>`<a href="${n[0]}" class="${(location.hash||'#/')==n[0]?'on':''}"><b>${n[1]}</b>${n[2]}</a>`).join(''):'';
   if(!user){HH=null;return login()}if(!HH&&!(await loadHH()))return joinScreen();
   const [p,a,b]=(location.hash||'#/').slice(2).split('/');
   try{await({'':home,recepten:recipes,recept:()=>detail(a),bewerk:()=>edit(a),maken:()=>make(a),lijst:()=>list(a),historie:history}[p]||home)()}catch(e){app.innerHTML=`<h1>Er ging iets mis</h1><p>${esc(e.message)}</p>`}
 }
-function login(){app.innerHTML=`<h1>Mijn boodschappen</h1><label>E-mail</label><input id=e type=email><label>Wachtwoord (min. 6 tekens)</label><input id=w type=password><p><button id=li>Inloggen</button> <button class=s id=su>Account maken</button></p><p id=m></p>`;
- const f=k=>async()=>{const r=await db.auth[k]({email:e.value,password:w.value});m.textContent=r.error?r.error.message:(k=='signUp'&&!r.data.session?'Bevestig je e-mail en log daarna in.':'')};li.onclick=f('signInWithPassword');su.onclick=f('signUp')}
+function login(){app.innerHTML=`<h1>Mijn boodschappen</h1><label>E-mail</label><input id=e type=email><label>Wachtwoord (min. 6 tekens)</label><input id=w type=password><p><button id=li>Inloggen</button> <button class=s id=su>Account maken</button></p><p><button class=s id=fp>Wachtwoord vergeten</button></p><p id=m></p>`;
+ const f=k=>async()=>{const r=await db.auth[k]({email:e.value,password:w.value});m.textContent=r.error?r.error.message:(k=='signUp'&&!r.data.session?'Bevestig je e-mail en log daarna in.':'')};li.onclick=f('signInWithPassword');su.onclick=f('signUp');fp.onclick=async()=>{if(!e.value)return m.textContent='Vul eerst je e-mailadres in.';const r=await db.auth.resetPasswordForEmail(e.value,{redirectTo:location.origin+location.pathname});m.textContent=r.error?r.error.message:'Als dit adres bekend is, is er een mail verstuurd.'}}
 async function home(){const [r,l]=await Promise.all([db.from('recipes').select('*').order('created_at',{ascending:false}).limit(4),db.from('lists').select('*').order('created_at',{ascending:false}).limit(3)]);
  app.innerHTML=`<h1>Welkom</h1><div class=bar><a class=btn href="#/bewerk/nieuw">➕ Recept toevoegen</a><a class="btn s" href="#/maken">🛒 Boodschappenlijst maken</a><a class="btn s" href="#/recepten">🍝 Recepten</a><a class="btn s" href="#/historie">📜 Historie</a></div><h2>Recente recepten</h2><div class=grid>${r.data.map(card).join('')||'<p>Nog geen recepten. Voeg je eerste toe.</p>'}</div><h2>Laatste boodschappenlijsten</h2>${l.data.map(hrow).join('')||'<p>Nog geen lijsten.</p>'}`}
 const card=r=>`<div class=card><a href="#/recept/${r.id}" style="color:inherit;text-decoration:none"><div class=ph style="background-image:url('${photo(r.photo)}')">${r.photo?'':'🍽️'}</div><div class=t><b>${esc(r.name)}</b><br><small>${esc(r.category)||'–'} · ${r.servings} pers.</small></div></a><button class=fav onclick="fav('${r.id}',${!r.favorite})">${r.favorite?'♥':'♡'}</button></div>`;
 const hrow=l=>`<a class="card hist" href="#/lijst/${l.id}"><b>${dt(l.created_at)}</b><br><small>${l.recipes.map(r=>esc(r.name)+' ('+r.servings+')').join(', ')}</small></a>`;
 async function fav(id,v){await db.from('recipes').update({favorite:v}).eq('id',id);route()}
-async function recipes(){const {data}=await db.from('recipes').select('*').order('favorite',{ascending:false}).order('name');window.ALL=data;
+async function recipes(){FV=false;const {data}=await db.from('recipes').select('*').order('favorite',{ascending:false}).order('name');window.ALL=data;
  const cats=[...new Set(data.map(r=>r.category).filter(Boolean))];
- app.innerHTML=`<h1>Recepten</h1><div class=bar><input id=q placeholder="Zoek op naam" oninput="draw()"><select id=c onchange="draw()"><option value="">Alle categorieën</option>${cats.map(c=>`<option>${esc(c)}</option>`)}</select><a class=btn href="#/bewerk/nieuw">➕ Nieuw</a></div><div class=grid id=g></div>`;draw()}
-function draw(){const q=norm(document.getElementById('q').value),c=document.getElementById('c').value;document.getElementById('g').innerHTML=ALL.filter(r=>norm(r.name).includes(q)&&(!c||r.category==c)).map(card).join('')||'<p>Geen recepten gevonden.</p>'}
+ app.innerHTML=`<h1>Recepten (${data.length})</h1><div class=bar><input id=q placeholder="Zoek op naam" oninput="draw()"><select id=c onchange="draw()"><option value="">Alle categorieën</option>${cats.map(c=>`<option value="${esc(c)}">${esc(c)} (${data.filter(r=>r.category==c).length})</option>`).join('')}</select><button class=s onclick="FV=!FV;this.textContent=FV?'♥ Alleen favorieten':'♡ Favorieten';draw()">♡ Favorieten</button><a class=btn href="#/bewerk/nieuw">➕ Nieuw</a></div><div class=grid id=g></div>`;draw()}
+function draw(){const q=norm(document.getElementById('q').value),c=document.getElementById('c').value;document.getElementById('g').innerHTML=ALL.filter(r=>norm(r.name).includes(q)&&(!c||r.category==c)&&(!FV||r.favorite)).map(card).join('')||'<p>Geen recepten gevonden.</p>'}
 async function detail(id){const {data:r}=await db.from('recipes').select('*').eq('id',id).single();let n=r.servings;
  const paint=()=>{app.innerHTML=`${r.photo?`<img class=hero src="${photo(r.photo)}">`:''}<h1>${esc(r.name)}</h1><p>${esc(r.description)}</p><p><small>${esc(r.category)}</small></p>
  <div class=stp><button onclick="S(-1)">−</button><b>${n} personen</b><button onclick="S(1)">+</button></div>
@@ -111,23 +111,23 @@ async function save(id){if(!R.name.trim())return alert('Geef het recept een naam
  const {data,error}=await q;if(error)return alert(error.message);go('#/recept/'+data.id)}
 async function make(from){const {data}=await db.from('recipes').select('id,name,servings').order('name');let pre={};
  if(from){const l=(await db.from('lists').select('recipes').eq('id',from).single()).data;l.recipes.forEach(r=>pre[r.id]=r.servings)}
- app.innerHTML=`<h1>Boodschappenlijst maken</h1>${data.map(r=>`<div class=it><input type=checkbox data-r=${r.id} ${pre[r.id]?'checked':''}><span>${esc(r.name)}</span><input type=number min=1 style="width:70px" id="n${r.id}" value="${pre[r.id]||r.servings}"> pers.</div>`).join('')||'<p>Voeg eerst recepten toe.</p>'}<p><button onclick="build()">Maak boodschappenlijst</button></p>`;
- window.RC=data}
-async function build(){const sel=RC.filter(r=>document.querySelector(`[data-r="${r.id}"]`).checked);if(!sel.length)return alert('Kies minstens één recept.');
+ app.innerHTML=`<h1>Boodschappenlijst maken</h1><input id=ms placeholder="Zoek een recept" oninput="fl()" style="margin-bottom:10px">${data.map(r=>`<div class="it mr" data-n="${esc(norm(r.name))}"><input type=checkbox data-r=${r.id} ${pre[r.id]?'checked':''}><span>${esc(r.name)}</span><input type=number min=1 style="width:70px" id="n${r.id}" value="${pre[r.id]||3}"> pers.</div>`).join('')||'<p>Voeg eerst recepten toe.</p>'}<p><button onclick="build(this)">Maak boodschappenlijst</button></p>`;
+ window.RC=data;window.fl=()=>{const q=norm(ms.value);document.querySelectorAll('.mr').forEach(r=>r.style.display=r.dataset.n.includes(q)?'':'none')}}
+async function build(bt){bt.disabled=true;bt.textContent='Bezig...';const reset=()=>{bt.disabled=false;bt.textContent='Maak boodschappenlijst'};const sel=RC.filter(r=>document.querySelector(`[data-r="${r.id}"]`).checked);if(!sel.length){reset();return alert('Kies minstens één recept.')}
  const [{data:full},{data:am}]=await Promise.all([db.from('recipes').select('*').in('id',sel.map(r=>r.id)),db.from('aisles').select('*')]);
  const map=Object.fromEntries(am.map(a=>[a.name,a.aisle])),acc={},rec=[];
  full.forEach(r=>{const n=+document.getElementById('n'+r.id).value||r.servings;rec.push({id:r.id,name:r.name,servings:n});
   r.ingredients.forEach(i=>{const [b,m]=BASE[i.unit],k=norm(i.name),key=k+'|'+b;(acc[key]=acc[key]||{key,name:k,qty:0,base:b,aisle:aisleOf(k,map),done:false}).qty+=i.qty*m*n/r.servings})});
- const {data,error}=await db.from('lists').insert({recipes:rec,items:Object.values(acc)}).select().single();if(error)return alert(error.message);go('#/lijst/'+data.id)}
+ const {data,error}=await db.from('lists').insert({recipes:rec,items:Object.values(acc)}).select().single();if(error){reset();return alert(error.message)}go('#/lijst/'+data.id)}
 async function list(id){const {data:l}=await db.from('lists').select('*').eq('id',id).single();
- const paint=()=>{const by=a=>l.items.filter(i=>i.aisle==a).sort((x,y)=>x.done-y.done);
+ const paint=()=>{const vis=i=>!i.done||SHOWD||(i.doneAt&&Date.now()-i.doneAt<5000),by=a=>l.items.filter(i=>i.aisle==a&&vis(i)).sort((x,y)=>x.done-y.done);
   app.innerHTML=`<h1>Boodschappen</h1><p>${dt(l.created_at)} · ${l.recipes.map(r=>esc(r.name)+' ('+r.servings+')').join(', ')}</p>`+[...new Set([...AIS,...l.items.map(i=>i.aisle)])].filter(a=>by(a).length).map(a=>`<h2>${esc(a)}</h2>`+by(a).map(i=>`<div class="it ${i.done?'done':''}"><input type=checkbox ${i.done?'checked':''} onchange="tick('${i.key}')"><span>${fmtB(i.qty,i.base)} ${esc(i.name)}</span><select class=noprint onchange="mvA('${i.key}',this.value)">${AIS.map(x=>`<option ${x==i.aisle?'selected':''}>${x}`)}</select></div>`).join('')).join('')+
-  `<div class=bar><button onclick="print()">🖨️ Afdrukken / PDF</button><button class=s onclick="cp()">Kopiëren</button><button class=s onclick="sh()">Delen</button><button class=s onclick="csv()">CSV</button><a class="btn s" href="#/maken/${id}">Opnieuw gebruiken</a></div>`};
+  `<div class=bar><button onclick="print()">🖨️ Afdrukken / PDF</button><button class=s onclick="cp()">Kopiëren</button><button class=s onclick="sh()">Delen</button><button class=s onclick="csv()">CSV</button><a class="btn s" href="#/maken/${id}">Opnieuw gebruiken</a><button class=s onclick="tg()">Afgevinkt tonen (${l.items.filter(i=>i.done).length})</button><button class=d onclick="dl()">Lijst verwijderen</button></div>`};
  const text=()=>l.items.map(i=>`${i.done?'[x]':'[ ]'} ${fmtB(i.qty,i.base)} ${i.name}`).join('\n');
  const sv=()=>db.from('lists').update({items:l.items}).eq('id',id);
- window.tick=k=>{const i=l.items.find(x=>x.key==k);i.done=!i.done;paint();sv()};
+ window.tick=k=>{const i=l.items.find(x=>x.key==k);i.done=!i.done;i.doneAt=i.done?Date.now():null;paint();sv();setTimeout(paint,5100)};
  window.mvA=async(k,a)=>{const i=l.items.find(x=>x.key==k);i.aisle=a;paint();await sv();await db.from('aisles').upsert({name:i.name,aisle:a})};
- window.cp=()=>navigator.clipboard.writeText(text()).then(()=>alert('Gekopieerd'));
+ SHOWD=false;window.tg=()=>{SHOWD=!SHOWD;paint()};window.dl=async()=>{if(!confirm('Deze lijst verwijderen?'))return;await db.from('lists').delete().eq('id',id);go('#/historie')};window.cp=()=>navigator.clipboard.writeText(text()).then(()=>alert('Gekopieerd'));
  window.sh=()=>navigator.share?navigator.share({title:'Boodschappen',text:text()}):cp();
  window.csv=()=>{const c='Aantal,Product,Categorie\n'+l.items.map(i=>[fmtB(i.qty,i.base),i.name,i.aisle].map(v=>`"${v}"`).join(',')).join('\n'),a=document.createElement('a');a.href=URL.createObjectURL(new Blob([c],{type:'text/csv'}));a.download='boodschappen.csv';a.click()};paint()}
 async function history(){const {data}=await db.from('lists').select('*').order('created_at',{ascending:false});app.innerHTML=`<h1>Historie</h1>${data.map(hrow).join('')||'<p>Nog geen lijsten.</p>'}<h2>Huishouden</h2><p>${esc(HI.name)}. Code om iemand te laten aansluiten: <b>${esc(HI.code)}</b></p><p><button class=s onclick="exportAll()">Alles exporteren (back-up)</button> <button class=s onclick="db.auth.signOut()">Uitloggen</button></p>`}
@@ -139,5 +139,6 @@ async function exportAll(){const [r,l]=await Promise.all([db.from('recipes').sel
  const b64=async p=>{const {data}=await db.storage.from('recipe-photos').download(p);return new Promise(res=>{const f=new FileReader();f.onload=()=>res(f.result);f.readAsDataURL(data)})};
  for(const x of r.data)if(x.photo)x.photo_data=await b64(x.photo);
  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({exported:new Date().toISOString(),recipes:r.data,lists:l.data})],{type:'application/json'}));a.download='boodschappen-back-up.json';a.click()}
-addEventListener('hashchange',route);db.auth.onAuthStateChange(()=>setTimeout(route,0));route();
+function newPw(){app.innerHTML=`<h1>Nieuw wachtwoord</h1><label>Nieuw wachtwoord (min. 6 tekens)</label><input id=pw type=password><p><button id=pb>Opslaan</button></p><p id=pm></p>`;pb.onclick=async()=>{const {error}=await db.auth.updateUser({password:pw.value});pm.textContent=error?error.message:'Wachtwoord gewijzigd.';if(!error)setTimeout(()=>{window.REC=0;go('#/');route()},1200)}}
+addEventListener('hashchange',route);let lastUid;db.auth.onAuthStateChange((ev,se)=>{if(ev=='PASSWORD_RECOVERY'){window.REC=1;return setTimeout(newPw,0)}const u=se?.user?.id||null;if(u!==lastUid){lastUid=u;setTimeout(route,0)}});route();
 </script></body></html>
