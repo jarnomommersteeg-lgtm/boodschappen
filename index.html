@@ -90,13 +90,16 @@ function form(id){const cats=[...new Set((window.ALL||[]).map(r=>r.category).fil
  <label>Categorie</label><input data-f=category list=cl value="${esc(R.category)}"><datalist id=cl>${cats.map(c=>`<option>${esc(c)}`).join('')}</datalist>
  <label>Aantal personen (standaard)</label><input data-f=servings type=number min=1 value="${R.servings}">
  <h2>Ingrediënten</h2>${R.ingredients.map((i,k)=>`<div class=row><input placeholder="Naam" data-i=${k} data-g=name value="${esc(i.name)}"><input class=n type=number step=any placeholder="Aantal" data-i=${k} data-g=qty value="${i.qty}"><select class=u data-i=${k} data-g=unit>${UNITS.map(u=>`<option ${u==i.unit?'selected':''}>${u}`).join('')}</select><button class="s x" onclick="R.ingredients.splice(${k},1);form('${id}')">✕</button></div>`).join('')}
- <button class=s onclick="R.ingredients.push({name:'',qty:'',unit:'gram'});form('${id}')">+ Ingrediënt toevoegen</button>
+ <button class=s onclick="add('i','${id}')">+ Ingrediënt toevoegen</button>
  <h2>Bereidingsstappen</h2>${R.steps.map((s,k)=>`<div class=row><b style="flex:0 0 24px">${k+1}.</b><textarea rows=2 data-s=${k}>${esc(s)}</textarea><button class="s x" onclick="mv(${k},-1,'${id}')">↑</button><button class="s x" onclick="mv(${k},1,'${id}')">↓</button><button class="s x" onclick="R.steps.splice(${k},1);form('${id}')">✕</button></div>`).join('')}
- <button class=s onclick="R.steps.push('');form('${id}')">+ Stap toevoegen</button>
+ <button class=s onclick="add('s','${id}')">+ Stap toevoegen</button>
  <p><button onclick="save('${id}')">Opslaan</button> <a class="btn s" href="#/recepten">Annuleren</a></p>`;
  app.oninput=e=>{const t=e.target.dataset;if(t.f)R[t.f]=t.f=='servings'?+e.target.value||1:e.target.value;if(t.g)R.ingredients[t.i][t.g]=e.target.value;if(t.s)R.steps[t.s]=e.target.value};
  app.onchange=e=>{if(e.target.dataset.g=='unit')R.ingredients[e.target.dataset.i].unit=e.target.value};
+ app.onkeydown=e=>{const d=e.target.dataset;if(e.key!='Enter'||d.i===undefined||e.target.tagName=='SELECT')return;e.preventDefault();const k=+d.i;if(k==R.ingredients.length-1)add('i',id);else focusEl('[data-i="'+(k+1)+'"][data-g=name]')};
  document.getElementById('pf').onchange=e=>{photoFile=e.target.files[0];form(id)}}
+function focusEl(q){const e=document.querySelector(q);if(e)e.focus()}
+function add(kind,id){if(kind=='i'){R.ingredients.push({name:'',qty:'',unit:'gram'});form(id);focusEl('[data-i="'+(R.ingredients.length-1)+'"][data-g=name]')}else{R.steps.push('');form(id);focusEl('[data-s="'+(R.steps.length-1)+'"]')}}
 function mv(k,d,id){const s=R.steps,j=k+d;if(j<0||j>=s.length)return;[s[k],s[j]]=[s[j],s[k]];form(id)}
 const shrink=f=>new Promise(res=>{const im=new Image();im.onload=()=>{const m=1200,s=Math.min(1,m/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=im.width*s;c.height=im.height*s;c.getContext('2d').drawImage(im,0,0,c.width,c.height);c.toBlob(res,'image/jpeg',.8)};im.src=URL.createObjectURL(f)});
 async function save(id){if(!R.name.trim())return alert('Geef het recept een naam.');
